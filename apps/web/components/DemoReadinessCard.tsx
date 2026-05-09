@@ -6,7 +6,7 @@ function describeMode(realtime: RealtimeClientConfig | null, voice: VoicePipelin
   if (realtime?.status === 'live_ready') return 'Live OpenAI Realtime is configured through the realtime bridge.';
   if (realtime?.status === 'browser_direct_ready') return 'Live OpenAI Realtime can start directly from this page via browser WebRTC.';
   if (realtime?.enabled) return 'Live OpenAI Realtime is partially configured.';
-  return 'Demo fallback mode: manual controls + grounded text/browser speech.';
+  return 'Offline proof mode: manual controls plus grounded text and simulated voice questions.';
 }
 
 export function DemoReadinessCard({ snapshot, bootstrap, voice }: { snapshot: SessionSnapshot; bootstrap: BootstrapStatus | null; voice: VoicePipelineStatus | null }) {
@@ -25,13 +25,13 @@ export function DemoReadinessCard({ snapshot, bootstrap, voice }: { snapshot: Se
         ? `Realtime bridge configured for ${realtime?.model}`
         : realtime?.status === 'browser_direct_ready'
           ? `Browser-direct WebRTC ready for ${realtime?.model}`
-          : 'Fallback mode only',
+          : 'Text/simulated-voice proof only',
     },
     { label: 'Presenter mode', ok: true, detail: 'Voice-only mode: no avatar vendor or browser avatar SDK required' },
   ];
 
   const readyCount = checks.filter((item) => item.ok).length;
-  const headline = readyCount >= 3 ? 'Demo-ready with live seams' : readyCount >= 2 ? 'Demo-ready in fallback mode' : 'Partially ready';
+  const headline = readyCount >= 3 ? 'Demo-ready with live seams' : readyCount >= 2 ? 'Ready for text proof' : 'Partially ready';
   const tone = readyCount >= 3 ? 'var(--accent)' : readyCount >= 2 ? '#b45309' : 'var(--error-text)';
 
   return (

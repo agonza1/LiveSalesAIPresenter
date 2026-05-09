@@ -320,7 +320,6 @@ def connect(session_id: str, payload: SessionConnectRequest | None = None) -> di
             'start_endpoint': f'/sessions/{session_id}/connect',
             'ask_endpoint': f'/sessions/{session_id}/ask',
             'stop_endpoint': f'/sessions/{session_id}/disconnect',
-            'browser_transcription': False,
         },
         'avatar': None,
         'realtime': {
@@ -1353,7 +1352,6 @@ def _build_bootstrap_response(state: PipecatSessionState) -> dict[str, Any]:
             'start_endpoint': f'/sessions/{state.session_id}/connect',
             'ask_endpoint': f'/sessions/{state.session_id}/ask',
             'stop_endpoint': f'/sessions/{state.session_id}/disconnect',
-            'browser_transcription': False,
         },
         'realtime': {
             **state.realtime,

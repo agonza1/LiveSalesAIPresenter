@@ -59,7 +59,6 @@ class RealtimeBootstrapService:
                 'start_endpoint': f'/sessions/{session_id}/connect',
                 'ask_endpoint': f'/sessions/{session_id}/ask',
                 'stop_endpoint': f'/sessions/{session_id}/disconnect',
-                'browser_transcription': False,
             }
 
         existing_plan = payload.get('pipecatPlan') if isinstance(payload.get('pipecatPlan'), dict) else {}

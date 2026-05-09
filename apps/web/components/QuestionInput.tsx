@@ -5,14 +5,13 @@ import { FormEvent, useState } from 'react';
 interface QuestionInputProps {
   busy: boolean;
   voiceActive?: boolean;
-  voiceSupported?: boolean;
   onSubmit: (question: string) => Promise<void>;
   onSimulateVoice?: (question: string) => Promise<void>;
   onStartVoice?: () => Promise<void>;
   onStopVoice?: () => Promise<void>;
 }
 
-export function QuestionInput({ busy, voiceActive, voiceSupported, onSubmit, onSimulateVoice, onStartVoice, onStopVoice }: QuestionInputProps) {
+export function QuestionInput({ busy, voiceActive, onSubmit, onSimulateVoice, onStartVoice, onStopVoice }: QuestionInputProps) {
   const [question, setQuestion] = useState('');
 
   async function submitQuestion(mode: 'ask' | 'voice') {
@@ -114,11 +113,6 @@ export function QuestionInput({ busy, voiceActive, voiceSupported, onSubmit, onS
           Stop voice
         </button>
       </div>
-      {!voiceSupported ? (
-        <p style={{ margin: '10px 0 0', color: 'var(--muted)', fontSize: 13, lineHeight: 1.5 }}>
-          Browser speech recognition is unavailable here, but you can still start live voice when an OpenAI Realtime transport is configured.
-        </p>
-      ) : null}
     </form>
   );
 }

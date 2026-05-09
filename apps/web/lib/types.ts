@@ -184,7 +184,6 @@ export interface VoicePipelineStatus {
   start_endpoint?: string | null;
   ask_endpoint?: string | null;
   stop_endpoint?: string | null;
-  browser_transcription?: boolean;
   transcript?: string | null;
   answer?: string | null;
   instructions?: string | null;

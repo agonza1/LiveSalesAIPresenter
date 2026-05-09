@@ -191,7 +191,7 @@ def test_deck_upload_session_and_qna(tmp_path: Path):
     assert len(snapshot['transcript']) >= 7
 
 
-def test_realtime_bridge_voice_fallback_bootstrap_and_question(tmp_path: Path):
+def test_pipecat_voice_bootstrap_and_question(tmp_path: Path):
     pdf_path = tmp_path / 'demo.pdf'
     _create_sample_pdf(pdf_path)
 
@@ -214,11 +214,10 @@ def test_realtime_bridge_voice_fallback_bootstrap_and_question(tmp_path: Path):
             'status': 'scaffolded',
             'voice': {
                 'status': 'idle',
-                'mode': 'browser-speech-grounded-fallback',
-                'start_endpoint': f"/sessions/{session_payload['session_id']}/voice/start",
-                'ask_endpoint': f"/sessions/{session_payload['session_id']}/voice/question",
-                'stop_endpoint': f"/sessions/{session_payload['session_id']}/voice/stop",
-                'browser_transcription': True,
+                'mode': 'pipecat-orchestrated',
+                'start_endpoint': f"/sessions/{session_payload['session_id']}/connect",
+                'ask_endpoint': f"/sessions/{session_payload['session_id']}/ask",
+                'stop_endpoint': f"/sessions/{session_payload['session_id']}/disconnect",
             },
         }
 
@@ -230,7 +229,7 @@ def test_realtime_bridge_voice_fallback_bootstrap_and_question(tmp_path: Path):
         'mode': 'pipecat-orchestrated',
         'start_endpoint': '/sessions/placeholder/connect',
     }
-    assert voice_payload['mode'] in {'browser-speech-grounded-fallback', 'pipecat-orchestrated'}
+    assert voice_payload['mode'] == 'pipecat-orchestrated'
     assert voice_payload['start_endpoint']
 
     start_response = client.post(f"/api/sessions/{session_payload['session_id']}/start")
@@ -436,11 +435,11 @@ def test_pipecat_orchestrator_agent_state_and_tool_flow(tmp_path: Path):
             pipecat_server.SessionAskRequest(transcript='where are we in the deck?'),
         )
         assert current_slide_question_payload['status'] == 'answered'
-        assert 'Current slide is 1' in current_slide_question_payload['answer']
+        assert 'Current slide is 3' in current_slide_question_payload['answer']
         assert current_slide_question_payload['citations']
 
         current_slide = client.get(f"/api/sessions/{session_payload['session_id']}/current-slide").json()
-        assert current_slide['index'] == 0
+        assert current_slide['index'] == 2
 
         after_payload = pipecat_server.get_agent_state(session_payload['session_id'])
         assert after_payload['tool_state']

@@ -1,148 +1,93 @@
-# Step 2 — Pipecat live agent session runner
+# Pipecat live voice contract
+
+This doc captures the current voice-only direction for the MVP.
 
 ## Goal
-Turn the current logical Pipecat orchestration seam into the primary live-agent path:
-- prompt/instructions loaded from FastAPI
-- tool manifest exposed from FastAPI
-- live agent session uses tool calling as the normal control path
-- frontend connects to the live Pipecat-managed session state
-- fake `/ask` remains only as a test/dev harness, not product architecture
+Make Pipecat the live voice orchestrator while FastAPI remains the source of truth for deck/session state.
 
-## Current baseline from step 1
-- `apps/pipecat/server.py` supports bootstrap/connect/disconnect.
-- Pipecat session registry exists in-memory.
-- FastAPI contract + instructions load correctly.
-- `/ask` can already route grounded questions and simple tool-like directives via FastAPI.
-- Repo validation is green:
-  - `npm run test:api`
-  - `npm run build:web`
-  - focused Pipecat grounded-loop test passes.
+The live path should:
+- load prompt/instructions from FastAPI
+- use the FastAPI tool manifest for slide state, search, navigation, pause/resume, and grounded Q&A
+- expose a stable Pipecat agent/session contract to the web app
+- use WebRTC for browser media transport
+- keep `/sessions/{id}/ask` as a transcript-injection test/dev harness
 
-## What step 2 should mean in this repo
-Because this repo is still browser-transport-first, step 2 should not pretend we already have a full server-side audio/media worker.
+## Current architecture
 
-Instead, step 2 should deliver a *real live agent contract* where:
-1. Pipecat owns session bootstrap + live agent config.
-2. Pipecat exposes tool-calling behavior as the intended runtime path.
-3. frontend connects to Pipecat as the live orchestrator entrypoint.
-4. browser/WebRTC transport can still carry the audio until a deeper worker exists.
+```mermaid
+sequenceDiagram
+  participant Web as Next.js presentation UI
+  participant API as FastAPI state + grounding
+  participant Pipecat as Pipecat voice service
+  participant OpenAI as OpenAI Realtime
 
-## Detailed implementation steps
+  Web->>API: create deck/session, control slides, ask text questions
+  API-->>Web: session snapshot, slides, transcript, grounded answers
 
-### 2.1 Define the live Pipecat session model
-In `apps/pipecat/server.py` extend session state with:
-- `agent_status`: `idle | bootstrapped | connected | listening | thinking | speaking | paused | disconnected`
-- `transport_mode`: `browser-webrtc | browser-fallback | server-orchestrated`
-- `tool_state` / last tool call metadata
-- `live_session` metadata passthrough
-- `frontend_contract` payload for the web app
+  Web->>API: POST /api/bootstrap/sessions/{id}
+  API->>Pipecat: POST /sessions/{id}/bootstrap
+  Pipecat->>API: fetch contract + instructions
+  Pipecat-->>API: voice/session plan
+  API-->>Web: bootstrap status
 
-Definition of done:
-- bootstrap/connect responses expose a consistent state model the frontend can rely on
+  Web->>Pipecat: POST /sessions/{id}/live/create
+  Web->>Pipecat: POST /sessions/{id}/live/join with WebRTC offer
+  Pipecat-->>Web: SDP answer + ICE endpoints
+  Pipecat->>OpenAI: realtime audio + tool-calling session
+  Pipecat->>API: execute slide/Q&A tools
+  API-->>Pipecat: grounded state/action result
+  Pipecat-->>Web: audio response + state updates
+```
 
-### 2.2 Normalize a live-agent bootstrap response
-Unify bootstrap/connect into a shape that clearly tells the frontend:
-- whether OpenAI realtime is configured
-- whether browser direct transport is still being used underneath
-- whether Pipecat is the orchestration authority
-- what instructions/tool manifest apply
-- what next action the client should take
+## Runtime contracts
 
-Response should include:
-- session identity
-- orchestration mode
-- instructions
-- tool manifest
-- transport details
-- avatar readiness
-- current slide index
-- next step / status label
+### FastAPI owns
+- deck metadata and generated slide assets
+- presentation session status/current slide/autoplay
+- transcript and live events
+- grounded Q&A
+- tool endpoints for current slide, search, navigation, pause/resume, and slide content
 
-Definition of done:
-- frontend no longer needs to infer live behavior from mixed legacy payloads
+### Pipecat owns
+- live voice session lifecycle
+- browser WebRTC offer/answer/ICE handling
+- OpenAI Realtime session config
+- realtime tool dispatch into FastAPI
+- transcript-injection `/ask` harness for automated proof
 
-### 2.3 Add an explicit Pipecat live-agent endpoint layer
-Add endpoints like:
+### Web owns
+- operator and presentation UI
+- slide controls
+- text Q&A and simulated voice harness
+- live voice start/stop and WebRTC client connection
+
+## Key endpoints
+
+FastAPI:
+- `POST /api/bootstrap/sessions/{session_id}`
+- `GET /api/realtime/sessions/{session_id}/contract`
+- `GET /api/realtime/sessions/{session_id}/instructions`
+- `POST /api/sessions/{session_id}/ask`
+- slide tool endpoints under `/api/sessions/{session_id}/...`
+
+Pipecat:
+- `POST /sessions/{session_id}/bootstrap`
 - `POST /sessions/{session_id}/agent/start`
 - `GET /sessions/{session_id}/agent/state`
 - `POST /sessions/{session_id}/agent/stop`
+- `POST /sessions/{session_id}/live/create`
+- `POST /sessions/{session_id}/live/join`
+- `POST /sessions/{session_id}/live/ice`
+- `POST /sessions/{session_id}/ask` for transcript-injection tests/dev proof
 
-These do not need to run full audio media server logic yet.
-They should:
-- mark the live agent as active
-- create/update live transport metadata from FastAPI/bootstrap services
-- expose instructions/tool manifest/current slide context
-- serve as the primary entrypoint for web live mode
-
-Definition of done:
-- there is a clean “live agent session” contract separate from the temporary `/ask` harness
-
-### 2.4 Make tool-calling the canonical behavior path
-Refactor tool handling into explicit helpers:
-- `call_get_current_slide`
-- `call_search_slides`
-- `call_get_slide_content`
-- `call_next_slide`
-- `call_prev_slide`
-- `call_goto_slide`
-- `call_pause`
-- `call_resume`
-
-Then expose them through:
-- tool manifest returned to clients
-- internal dispatch helpers used by any fake/test ask route
-
-Definition of done:
-- tool behavior is structured like a real agent tool layer, not string-matching glued into one route
-
-### 2.5 Make frontend live mode consume the new Pipecat agent contract
-Targets likely include:
-- `apps/web/lib/api.ts`
-- `apps/web/components/PresentationShell.tsx`
-- related avatar/live controls
-
-Changes:
-- use Pipecat agent start/state endpoints as the preferred live entrypoint
-- keep browser speech fallback as secondary/dev path
-- display real agent states from Pipecat (`connected`, `listening`, `thinking`, etc.)
-- keep transcript/slide state synchronized with backend truth
-
-Definition of done:
-- Start live voice uses Pipecat agent contract first
-- UI labels reflect real orchestration state
-
-### 2.6 Keep fake ask only for testing/dev harness
-Retain `/sessions/{session_id}/ask` only to:
-- simulate a transcript turn in e2e/dev
-- validate tool dispatch and grounded answering without live mic/audio
-
-Definition of done:
-- route is clearly auxiliary, not the main architectural path
-
-### 2.7 Add validation for the step-2 live contract
-Add/extend tests to validate:
-- bootstrap/connect/agent-start/state/stop flow
-- tool manifest present in live contract
-- current slide context included
-- fake ask still works as harness
-- frontend build stays green
-
-Minimum validation gates:
-- focused API/Pipecat tests
+## Validation gates
 - `npm run test:api`
+- `npm run lint:web`
 - `npm run build:web`
+- `npm run test:voice-proof` against a running stack
 
-## Recommended execution order
-1. Extend Pipecat session state model.
-2. Add agent start/state/stop endpoints.
-3. Refactor tool calls into explicit helpers.
-4. Normalize bootstrap/connect payloads.
-5. Switch frontend live startup to agent start/state contract.
-6. Keep fake ask as test harness.
-7. Add/adjust tests and rerun gates.
-
-## Immediate coding target
-Start in `apps/pipecat/server.py`:
-- add agent start/state/stop endpoints
-- normalize live state model
-- extract tool-call helpers
+## Current MVP boundaries
+- Voice-only branch: no avatar vendor, no browser avatar SDK.
+- Live voice requires Pipecat plus OpenAI Realtime credentials.
+- Text Q&A and simulated voice remain useful for non-live proof and regression testing.
+- The automated media proof validates SDP answer, ICE exchange, and remote audio receiver; full spoken-audio automation is a later slice.

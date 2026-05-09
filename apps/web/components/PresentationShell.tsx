@@ -2,9 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-type BrowserSpeechRecognitionEvent = {
-  results?: ArrayLike<ArrayLike<{ transcript?: string }>>;
-};
 import { askQuestion, bootstrapSession, controlSession, getPipecatAgentState, getPipecatLiveState, getPublicSession, getSessionLiveState, gotoSlide, sendVoicePipelineQuestion, setAutoplay, startVoicePipeline, stopVoicePipeline } from '@/lib/api';
 import { connectRealtimeBrowserSession, RealtimeBrowserSession, RealtimeConnectionStatus, RealtimeToolDefinition } from '@/lib/realtimeClient';
 import { connectPipecatSession } from '@/lib/pipecatClient';
@@ -40,7 +37,6 @@ export function PresentationShell({ initialData }: Props) {
   const [liveAnswer, setLiveAnswer] = useState('');
   const [liveConnectionStatus, setLiveConnectionStatus] = useState<RealtimeConnectionStatus>('idle');
   const [remoteAudioLevel, setRemoteAudioLevel] = useState(0);
-  const recognitionRef = useRef<any>(null);
   const realtimeClientRef = useRef<RealtimeBrowserSession | null>(null);
   const voiceStartRef = useRef(false);
 
@@ -168,12 +164,6 @@ export function PresentationShell({ initialData }: Props) {
     return () => {
       void realtimeClientRef.current?.disconnect();
     };
-  }, []);
-
-  const [voiceSupported, setVoiceSupported] = useState(false);
-
-  useEffect(() => {
-    setVoiceSupported(Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition));
   }, []);
 
   const apiOrigin = useMemo(() => {
@@ -379,8 +369,6 @@ export function PresentationShell({ initialData }: Props) {
     setVoicePipeline({ status: 'listening', mode: 'starting' });
 
     try {
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
       await realtimeClientRef.current?.disconnect();
       realtimeClientRef.current = null;
     } catch {
@@ -517,57 +505,18 @@ export function PresentationShell({ initialData }: Props) {
         voiceStartRef.current = false;
         return;
       } catch (error) {
-        setError(error instanceof Error ? error.message : 'Realtime transport connection failed; falling back to browser speech mode.');
+        setError(error instanceof Error ? error.message : 'Realtime transport connection failed.');
         setLiveConnectionStatus('error');
       }
     }
 
-    const recognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!recognitionCtor) {
-      setVoicePipeline((current) =>
-        current
-          ? {
-              ...current,
-              status: clientSecret ? 'error' : 'listening',
-              mode: clientSecret ? current.mode : 'demo-no-mic',
-            }
-          : { status: clientSecret ? 'error' : 'listening', mode: clientSecret ? 'provider-error' : 'demo-no-mic' },
-      );
-      setError('Browser speech recognition is not available in this browser, and realtime transport is not configured.');
-      voiceStartRef.current = false;
-      return;
-    }
-
-    const recognition = new recognitionCtor();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.continuous = false;
-    recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-      if (!transcript) return;
-      setLiveTranscript(transcript);
-      void run(async () => {
-        const result = await sendVoicePipelineQuestion(sessionId, transcript);
-        setVoicePipeline(result);
-        setAnswer(result.answer ?? '');
-      });
-    };
-    recognition.onerror = () => {
-      setError('Voice capture failed. Try again or use simulated voice.');
-    };
-    recognition.onend = () => {
-      setVoicePipeline((current) => (current ? { ...current, status: current.status === 'speaking' ? current.status : 'idle' } : current));
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
+    setVoicePipeline((current) => (current ? { ...current, status: 'error' } : { status: 'error', mode: 'provider-error' }));
+    setError('Realtime voice transport is not configured. Set OPENAI_API_KEY and run the Pipecat service, or use simulated voice/text Q&A for a non-live proof.');
     voiceStartRef.current = false;
   }
 
   async function handleStopVoice() {
     voiceStartRef.current = false;
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
     await realtimeClientRef.current?.disconnect();
     realtimeClientRef.current = null;
     setLiveConnectionStatus('idle');
@@ -702,7 +651,6 @@ export function PresentationShell({ initialData }: Props) {
         <QuestionInput
           busy={busy}
           voiceActive={voicePipeline?.status === 'listening' || voicePipeline?.status === 'thinking' || voicePipeline?.status === 'speaking'}
-          voiceSupported={voiceSupported}
           onSubmit={(question) =>
             run(async () => {
               const result = await askQuestion(sessionId, question);
@@ -748,7 +696,7 @@ export function PresentationShell({ initialData }: Props) {
                   </p>
                 ) : (
                   <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--muted)' }}>
-                    No provider token yet — using browser speech recognition plus backend grounding instead.
+                    No live provider token yet — use simulated voice/text Q&A until Realtime transport is configured.
                   </p>
                 )}
                 {(() => {

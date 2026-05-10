@@ -27,7 +27,7 @@ export function DemoReadinessCard({ snapshot, bootstrap, voice }: { snapshot: Se
           ? `Browser-direct WebRTC ready for ${realtime?.model}`
           : 'Text/simulated-voice proof only',
     },
-    { label: 'Presenter mode', ok: true, detail: 'Voice-only mode: no avatar vendor or browser avatar SDK required' },
+    { label: 'Presenter mode', ok: true, detail: 'Pipecat HeyGen avatar mode: server-owned avatar video transport' },
   ];
 
   const readyCount = checks.filter((item) => item.ok).length;

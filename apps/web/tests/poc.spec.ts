@@ -29,7 +29,7 @@ test('default deck demo flow works end to end', async ({ page, baseURL }) => {
 
   expect(baseURL, 'Playwright baseURL must be configured').toBeTruthy();
   await gotoWithRetry(page, baseURL!);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(/voice-only ai sales presentations for pdf decks\.?/i);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/avatar-led ai sales presentations for pdf decks\.?/i);
 
   const defaultDeckButton = page.getByRole('button', { name: 'Use default attached deck' });
   await expect(defaultDeckButton.or(page.getByRole('button', { name: 'Upload PDF deck' }))).toBeVisible({ timeout: 30000 });

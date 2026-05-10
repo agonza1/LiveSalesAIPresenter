@@ -103,6 +103,15 @@ export interface RealtimeClientConfig {
   pipecat_plan?: Record<string, unknown> | null;
 }
 
+
+export interface HeyGenTokenResponse {
+  provider: 'heygen';
+  enabled: boolean;
+  token: string;
+  avatar_id: string;
+  voice_id?: string | null;
+}
+
 export interface SessionSnapshot {
   session: PresentationSession;
   deck: DeckSummary;

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.services.heygen_service import heygen_service
 from app.services.pipecat_service import pipecat_service
 from app.services.realtime_service import realtime_service
 from app.services.session_service import append_live_answer, append_live_transcript, get_session_or_404, search_slides, serialize_slide
@@ -22,6 +23,16 @@ class LiveTranscriptRequest(BaseModel):
 class LiveAnswerRequest(BaseModel):
     question: str
     answer: str
+
+
+@router.post('/heygen/token')
+def create_heygen_streaming_token():
+    try:
+        return heygen_service.create_streaming_token()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'HeyGen token creation failed: {exc}') from exc
 
 
 @router.get('/sessions/{session_id}/contract')

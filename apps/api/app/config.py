@@ -17,6 +17,9 @@ class Settings:
     openai_realtime_model: str = os.getenv('OPENAI_REALTIME_MODEL', 'gpt-realtime-mini')
     openai_responses_model: str = os.getenv('OPENAI_RESPONSES_MODEL', 'gpt-4.1-mini')
     pipecat_service_url: str = os.getenv('PIPECAT_SERVICE_URL', 'http://localhost:8110')
+    heygen_api_key: str | None = os.getenv('HEYGEN_API_KEY')
+    heygen_avatar_id: str = os.getenv('HEYGEN_AVATAR_ID', 'default')
+    heygen_voice_id: str | None = os.getenv('HEYGEN_VOICE_ID')
 
 
 settings = Settings()

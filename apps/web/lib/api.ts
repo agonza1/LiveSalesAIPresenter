@@ -1,4 +1,4 @@
-import { AskResponse, BootstrapStatus, DeckSlidesResponse, DeckSummary, DefaultDeckMeta, PipecatAgentStatus, PipecatLiveCreateResponse, SessionCreateResponse, SessionLiveState, SessionSnapshot, VoicePipelineStatus } from './types';
+import { AskResponse, BootstrapStatus, DeckSlidesResponse, DeckSummary, DefaultDeckMeta, PipecatAgentStatus, PipecatLiveCreateResponse, SessionCreateResponse, SessionLiveState, SessionSnapshot, VoicePipelineStatus, HeyGenTokenResponse } from './types';
 
 function normalizeApiBase(value: string) {
   return value.replace(/\/$/, '').replace(/\/api$/, '');
@@ -168,6 +168,16 @@ export async function createSession(deckId: string): Promise<SessionCreateRespon
   });
 
   return handleResponse<SessionCreateResponse>(response);
+}
+
+
+export async function createHeyGenToken(): Promise<HeyGenTokenResponse> {
+  const response = await fetch(`${getApiBase()}/api/realtime/heygen/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  return handleResponse<HeyGenTokenResponse>(response);
 }
 
 export async function getRealtimeContract(sessionId: string) {

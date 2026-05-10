@@ -10,7 +10,7 @@ import { SlideStage } from './SlideStage';
 import { TranscriptPanel } from './TranscriptPanel';
 import { ControlBar } from './ControlBar';
 import { QuestionInput } from './QuestionInput';
-import { VoicePanel } from './VoicePanel';
+import { HeyGenAvatarPanel } from './HeyGenAvatarPanel';
 import { PresentationSummary } from './PresentationSummary';
 import { BootstrapStatusCard } from './BootstrapStatusCard';
 import { DemoReadinessCard } from './DemoReadinessCard';
@@ -739,11 +739,9 @@ export function PresentationShell({ initialData }: Props) {
       </div>
 
       <div style={{ display: 'grid', gap: 24 }}>
-        <VoicePanel
+        <HeyGenAvatarPanel
           talkTrack={activeVoiceLine}
           speaking={speaking}
-          realtime={bootstrap?.realtime ?? snapshot.realtime}
-          audioLevel={remoteAudioLevel}
         />
         <DemoReadinessCard snapshot={snapshot} bootstrap={bootstrap} voice={voicePipeline} />
         <LiveOpsCard live={liveState} />

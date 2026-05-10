@@ -22,8 +22,5 @@
   "overrides": {
     "postcss": "8.5.10",
     "protobufjs": "7.5.5"
-  },
-  "dependencies": {
-    "@heygen/streaming-avatar": "^2.1.0"
   }
 }

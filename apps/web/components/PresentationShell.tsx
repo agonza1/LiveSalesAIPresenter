@@ -740,6 +740,7 @@ export function PresentationShell({ initialData }: Props) {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <HeyGenAvatarPanel
+          sessionId={sessionId}
           talkTrack={activeVoiceLine}
           speaking={speaking}
         />

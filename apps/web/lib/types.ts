@@ -104,12 +104,22 @@ export interface RealtimeClientConfig {
 }
 
 
-export interface HeyGenTokenResponse {
-  provider: 'heygen';
-  enabled: boolean;
-  token: string;
-  avatar_id: string;
-  voice_id?: string | null;
+export interface HeyGenJoinInfo {
+  provider: 'pipecat-heygen-transport';
+  session_id?: string | null;
+  livekit_url?: string | null;
+  access_token?: string | null;
+  ws_url?: string | null;
+  avatar_id?: string | null;
+  sandbox?: boolean;
+}
+
+export interface HeyGenStartResponse {
+  status: string;
+  sessionId: string;
+  live?: PipecatLiveSession | Record<string, unknown> | null;
+  heygen?: HeyGenJoinInfo | null;
+  nextStep?: string | null;
 }
 
 export interface SessionSnapshot {

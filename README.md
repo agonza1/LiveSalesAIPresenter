@@ -14,7 +14,7 @@ Watch the walkthrough: [AI Sales Presenter Demo: Voice-Controlled Slide Deck wit
 - Create a public presentation session with deterministic slide state.
 - Serve a Next.js operator/presentation UI backed by FastAPI.
 - Run a Pipecat/OpenAI Realtime voice path when `OPENAI_API_KEY` is configured.
-- Render a HeyGen streaming video avatar when `HEYGEN_API_KEY` and `HEYGEN_AVATAR_ID` are configured.
+- Render a HeyGen LiveAvatar video avatar through Pipecat `HeyGenTransport` when `HEYGEN_LIVE_AVATAR_API_KEY` and `HEYGEN_AVATAR_ID` are configured.
 - Keep slide navigation, transcript, and Q&A grounded in the FastAPI session state.
 
 ## High-level architecture
@@ -144,7 +144,7 @@ Note: the build script intentionally clears `apps/web/.next` first. That avoids 
 6. Keep `.env`, DBs, caches, generated deck storage, and secrets out of git/GitHub.
 
 ## Current MVP boundaries
-- The active finish line is the proven voice/session loop plus a HeyGen video avatar surface; the old GPT realtime orb visualization has been replaced by streamed avatar video.
+- The active finish line is the proven voice/session loop plus a server-orchestrated HeyGen video avatar surface using Pipecat `HeyGenTransport`; the old GPT realtime orb visualization has been replaced by streamed LiveKit avatar video.
 - Pipecat owns the voice path: `/bootstrap`, `/live/create`, `/live/join`, `/live/ice`, `/ask`, and slide/navigation tools.
 - Text Q&A and simulated voice are available for non-live proof; live voice requires Pipecat plus OpenAI Realtime credentials.
 - Set `PRODUCTION=true` to hide non-live testing controls such as text Q&A and simulated voice in the presentation UI. Leave it false/empty for local proof and demo validation.

@@ -1,100 +1,73 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import StreamingAvatar, { AvatarQuality, StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
-import { createHeyGenToken } from '@/lib/api';
+import { Room, RoomEvent, Track } from 'livekit-client';
+import { startHeyGenAvatarSession } from '@/lib/api';
 
 interface HeyGenAvatarPanelProps {
+  sessionId: string;
   talkTrack: string;
   speaking: boolean;
 }
 
 type AvatarStatus = 'idle' | 'starting' | 'ready' | 'speaking' | 'error';
 
-export function HeyGenAvatarPanel({ talkTrack, speaking }: HeyGenAvatarPanelProps) {
+export function HeyGenAvatarPanel({ sessionId, talkTrack, speaking }: HeyGenAvatarPanelProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const avatarRef = useRef<StreamingAvatar | null>(null);
-  const lastSpokenRef = useRef('');
-  const startingRef = useRef(false);
+  const roomRef = useRef<Room | null>(null);
   const [status, setStatus] = useState<AvatarStatus>('idle');
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
 
-    async function startAvatar() {
-      if (startingRef.current || avatarRef.current) return;
-      startingRef.current = true;
+    async function startAvatarTransport() {
       setStatus('starting');
       setError('');
 
       try {
-        const token = await createHeyGenToken();
+        const response = await startHeyGenAvatarSession(sessionId);
+        const join = response.heygen;
+        if (!join?.livekit_url || !join?.access_token) {
+          throw new Error(response.nextStep || 'Pipecat HeyGen transport is still starting.');
+        }
         if (cancelled) return;
 
-        const avatar = new StreamingAvatar({ token: token.token });
-        avatarRef.current = avatar;
+        const room = new Room();
+        roomRef.current = room;
 
-        avatar.on(StreamingEvents.STREAM_READY, (event) => {
-          const maybeStream = (event as { detail?: MediaStream; stream?: MediaStream })?.detail ?? (event as { stream?: MediaStream })?.stream ?? avatar.mediaStream;
-          if (videoRef.current && maybeStream) {
-            videoRef.current.srcObject = maybeStream;
-            void videoRef.current.play().catch(() => undefined);
-          }
+        room.on(RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind !== Track.Kind.Video || !videoRef.current) return;
+          track.attach(videoRef.current);
+          void videoRef.current.play().catch(() => undefined);
           setStatus('ready');
         });
-        avatar.on(StreamingEvents.AVATAR_START_TALKING, () => setStatus('speaking'));
-        avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => setStatus('ready'));
-        avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => setStatus('idle'));
+        room.on(RoomEvent.Disconnected, () => setStatus('idle'));
 
-        await avatar.createStartAvatar({
-          quality: AvatarQuality.Medium,
-          avatarName: token.avatar_id,
-          voice: token.voice_id
-            ? {
-                voiceId: token.voice_id,
-                emotion: VoiceEmotion.FRIENDLY,
-              }
-            : undefined,
-          activityIdleTimeout: 600,
-        });
-
-        if (videoRef.current && avatar.mediaStream) {
-          videoRef.current.srcObject = avatar.mediaStream;
-          await videoRef.current.play().catch(() => undefined);
-          setStatus('ready');
-        }
+        await room.connect(join.livekit_url, join.access_token);
+        if (!cancelled) setStatus('ready');
       } catch (err) {
         setStatus('error');
-        setError(err instanceof Error ? err.message : 'HeyGen avatar failed to start');
-      } finally {
-        startingRef.current = false;
+        setError(err instanceof Error ? err.message : 'Pipecat HeyGen avatar failed to start');
       }
     }
 
-    void startAvatar();
+    void startAvatarTransport();
 
     return () => {
       cancelled = true;
-      const avatar = avatarRef.current;
-      avatarRef.current = null;
-      void avatar?.stopAvatar().catch(() => undefined);
+      const room = roomRef.current;
+      roomRef.current = null;
+      room?.disconnect();
     };
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
-    const text = talkTrack.trim();
-    const avatar = avatarRef.current;
-    if (!avatar || !text || text === lastSpokenRef.current || status === 'starting' || status === 'error') return;
+    if (status === 'ready' && speaking) setStatus('speaking');
+    if (status === 'speaking' && !speaking) setStatus('ready');
+  }, [speaking, status]);
 
-    lastSpokenRef.current = text;
-    void avatar.speak({ text, task_type: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((err) => {
-      setError(err instanceof Error ? err.message : 'HeyGen speak failed');
-      setStatus('error');
-    });
-  }, [status, talkTrack]);
-
-  const statusLabel = status === 'ready' && speaking ? 'Ready' : status.charAt(0).toUpperCase() + status.slice(1);
+  const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
 
   return (
     <div className="card" style={{ padding: 20 }}>
@@ -115,15 +88,14 @@ export function HeyGenAvatarPanel({ talkTrack, speaking }: HeyGenAvatarPanelProp
           ref={videoRef}
           autoPlay
           playsInline
-          muted={false}
           style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#020617' }}
         />
         {status !== 'ready' && status !== 'speaking' ? (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24, color: '#e2e8f0' }}>
             <div>
-              <strong>{status === 'starting' ? 'Starting HeyGen avatar…' : 'HeyGen avatar'}</strong>
+              <strong>{status === 'starting' ? 'Starting Pipecat HeyGen avatar…' : 'Pipecat HeyGen avatar'}</strong>
               <p style={{ margin: '8px 0 0', color: '#94a3b8', lineHeight: 1.5 }}>
-                {error || 'Waiting for the streaming avatar video.'}
+                {error || 'Waiting for the LiveKit avatar video.'}
               </p>
             </div>
           </div>

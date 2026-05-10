@@ -25,15 +25,6 @@ class LiveAnswerRequest(BaseModel):
     answer: str
 
 
-@router.post('/heygen/token')
-def create_heygen_streaming_token():
-    try:
-        return heygen_service.create_streaming_token()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f'HeyGen token creation failed: {exc}') from exc
-
 
 @router.get('/sessions/{session_id}/contract')
 def get_realtime_contract(session_id: str, db: Session = Depends(get_db)):
@@ -67,7 +58,7 @@ def get_realtime_contract(session_id: str, db: Session = Depends(get_db)):
         'tool_manifest': tool_manifest,
         'current_slide': serialize_slide(current_slide),
         'realtime': realtime_service.get_client_config(session_id=session.id, public_token=session.public_token),
-        'avatar': None,
+        'avatar': heygen_service.get_client_config(),
         'pipecat_plan': pipecat_service.build_session_plan(
             session_id=session.id,
             public_token=session.public_token,

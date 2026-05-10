@@ -2,6 +2,12 @@
 
 Demo-friendly local MVP for a slide-aware, voice-only AI sales presenter.
 
+## Demo
+
+[![AI Sales Presenter Demo: Voice-Controlled Slide Deck with Live Q&A](https://img.youtube.com/vi/80qYz72yj9U/maxresdefault.jpg)](https://youtu.be/80qYz72yj9U)
+
+Watch the walkthrough: [AI Sales Presenter Demo: Voice-Controlled Slide Deck with Live Q&A](https://youtu.be/80qYz72yj9U)
+
 ## What this repo does
 - Upload a PDF deck or use the built-in sample deck.
 - Turn the PDF into slide images, extracted text, summaries, talk tracks, and Q&A context.

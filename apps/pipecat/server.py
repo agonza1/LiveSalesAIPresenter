@@ -468,7 +468,6 @@ async def start_heygen_live_session(session_id: str, payload: LiveSessionCreateR
     live.video_ready = True
     live.add_event('heygen_live_session_start_requested', openai_ready=live.openai_ready)
     await _ensure_live_runtime(live, state)
-    await _wait_for_heygen_join(live)
     live.state = 'connected' if live.heygen_ready else live.state
 
     state.live_session = _serialize_live_session(live)
@@ -1237,6 +1236,16 @@ def _extract_heygen_join(live: LivePresenterSession) -> dict[str, Any]:
     }
 
 
+def _format_heygen_start_error(error: str | None) -> str:
+    if not error:
+        return 'HeyGen avatar session did not return a LiveKit join token yet.'
+    if 'No credits available for start session' in error or 'code\":4033' in error or 'code":4033' in error:
+        return 'HeyGen LiveAvatar could not start: no credits available for start session.'
+    if 'API request failed with status 403' in error:
+        return f'HeyGen LiveAvatar could not start: {error}'
+    return error
+
+
 async def _wait_for_heygen_join(live: LivePresenterSession) -> dict[str, Any]:
     for _ in range(80):
         join = _extract_heygen_join(live)
@@ -1245,9 +1254,16 @@ async def _wait_for_heygen_join(live: LivePresenterSession) -> dict[str, Any]:
             live.heygen_ready = True
             live.add_event('heygen_join_ready', session_id=join.get('session_id'))
             return join
+        if live.last_error:
+            live.add_event('heygen_join_failed', error=live.last_error)
+            raise HTTPException(status_code=502, detail=_format_heygen_start_error(live.last_error))
+        if live.runtime_task and live.runtime_task.done() and live.runtime_status == 'error':
+            error = live.last_error or 'HeyGen avatar runtime exited before returning a join token.'
+            live.add_event('heygen_join_failed', error=error)
+            raise HTTPException(status_code=502, detail=_format_heygen_start_error(error))
         await asyncio.sleep(0.1)
     live.add_event('heygen_join_pending')
-    return {}
+    raise HTTPException(status_code=504, detail='HeyGen avatar session is still starting; no browser join token was returned yet.')
 
 
 async def _ensure_live_runtime(live: LivePresenterSession, state: PipecatSessionState) -> None:

@@ -73,6 +73,8 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
   let audioContext: AudioContext | null = null;
   let remoteDescriptionSet = false;
   const pendingIceCandidates: RTCIceCandidateInit[] = [];
+  const remoteStreams = new Set<MediaStream>();
+  const remoteTracks = new Set<MediaStreamTrack>();
   const pc = new RTCPeerConnection();
   const audioEl = document.createElement('audio');
   audioEl.autoplay = true;
@@ -99,6 +101,30 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
       audioContext = null;
     }
     options.onRemoteAudioLevel?.(0);
+  };
+
+  const clearRemoteMedia = () => {
+    remoteTracks.forEach((track) => {
+      try {
+        track.stop();
+      } catch {}
+    });
+    remoteTracks.clear();
+    remoteStreams.forEach((stream) => {
+      stream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+    });
+    remoteStreams.clear();
+    audioEl.srcObject = null;
+    if (avatarVideoEl) {
+      avatarVideoEl.pause();
+      avatarVideoEl.srcObject = null;
+      avatarVideoEl.removeAttribute('src');
+      avatarVideoEl.load();
+    }
   };
 
   const startAudioMeter = (stream: MediaStream) => {
@@ -158,9 +184,12 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
 
     pc.ontrack = (event) => {
       const [stream] = event.streams;
+      remoteTracks.add(event.track);
+      if (stream) remoteStreams.add(stream);
 
       if (event.track.kind === 'video' && avatarVideoEl) {
         const videoStream = stream ?? new MediaStream([event.track]);
+        remoteStreams.add(videoStream);
         avatarVideoEl.srcObject = videoStream;
         avatarVideoEl.muted = true;
         avatarVideoEl.autoplay = true;
@@ -180,6 +209,7 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
 
       if (event.track.kind === 'audio') {
         const audioStream = stream ?? new MediaStream([event.track]);
+        remoteStreams.add(audioStream);
         audioEl.srcObject = audioStream;
         startAudioMeter(audioStream);
         void audioEl.play().catch((error) => {
@@ -300,14 +330,15 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
           }
           dataChannel?.close();
           pc.getSenders().forEach((sender) => sender.track?.stop());
+          pc.getReceivers().forEach((receiver) => receiver.track?.stop());
+          pc.getTransceivers().forEach((transceiver) => transceiver.stop());
           pc.close();
         } catch {}
         stopAudioMeter();
+        clearRemoteMedia();
         try {
           localStream?.getTracks().forEach((track) => track.stop());
         } catch {}
-        audioEl.srcObject = null;
-        if (avatarVideoEl) avatarVideoEl.srcObject = null;
         audioEl.remove();
         connected = false;
         setStatus('disconnected');
@@ -326,7 +357,7 @@ export async function connectPipecatSession(options: PipecatSessionOptions): Pro
       localStream?.getTracks().forEach((track) => track.stop());
       pc.close();
       stopAudioMeter();
-      if (avatarVideoEl) avatarVideoEl.srcObject = null;
+      clearRemoteMedia();
       audioEl.remove();
     } catch {}
     const message = error instanceof Error ? error.message : 'Pipecat connection failed';

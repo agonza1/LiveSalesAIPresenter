@@ -27,10 +27,11 @@ try:
     from aiortc.sdp import candidate_from_sdp
     from pipecat.adapters.schemas.function_schema import FunctionSchema
     from pipecat.adapters.schemas.tools_schema import ToolsSchema
-    from pipecat.frames.frames import ErrorFrame
+    from pipecat.frames.frames import ErrorFrame, LLMContextFrame
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
+    from pipecat.processors.aggregators.llm_context import LLMContext
     from pipecat.services.llm_service import FunctionCallParams
     from pipecat.services.openai.realtime.events import (
         AudioConfiguration,
@@ -64,6 +65,8 @@ except Exception:  # pragma: no cover - fallback for non-pipecat test envs
     HeyGenVideoService = None  # type: ignore[assignment]
     ServiceType = None  # type: ignore[assignment]
     ErrorFrame = None  # type: ignore[assignment]
+    LLMContext = None  # type: ignore[assignment]
+    LLMContextFrame = None  # type: ignore[assignment]
     Pipeline = None  # type: ignore[assignment]
     PipelineParams = None  # type: ignore[assignment]
     PipelineRunner = None  # type: ignore[assignment]
@@ -626,6 +629,45 @@ async def stop_live_session(session_id: str) -> dict[str, Any]:
         'status': 'ended',
         'sessionId': session_id,
         'live': serialized,
+    }
+
+
+@app.post('/sessions/{session_id}/present-current')
+async def present_current_slide(session_id: str) -> dict[str, Any]:
+    state = SESSIONS.get(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail='Pipecat session not found. Start the agent first.')
+
+    live = LIVE_SESSIONS.get(session_id)
+    if not live:
+        raise HTTPException(status_code=404, detail='Live session not found. Start live voice first.')
+
+    if not live.pipeline_task or not live.runtime_task or live.runtime_task.done():
+        await _ensure_live_runtime(live, state)
+
+    if not live.pipeline_task or not live.pipeline_ready or not PIPECAT_RUNTIME_AVAILABLE:
+        raise HTTPException(status_code=409, detail='Live voice pipeline is not ready to speak yet.')
+
+    prompt = (
+        'Start the presentation now. Briefly greet the audience, then present the current slide. '
+        'Use the current slide content and keep it concise. If a slide tool is available, use get_current_slide before speaking.'
+    )
+    context = LLMContext(messages=[{'role': 'user', 'content': prompt}])
+    await live.pipeline_task.queue_frame(LLMContextFrame(context))
+
+    state.status = 'connected'
+    state.agent_status = 'speaking'
+    state.last_transcript = prompt
+    state.live_session = _serialize_live_session(live)
+    state.frontend_contract = _build_agent_contract(state)
+    state.touch()
+    live.add_event('initial_presenter_prompt_queued')
+
+    return {
+        'status': 'queued',
+        'sessionId': session_id,
+        'agent_status': state.agent_status,
+        'live': _serialize_live_session(live),
     }
 
 

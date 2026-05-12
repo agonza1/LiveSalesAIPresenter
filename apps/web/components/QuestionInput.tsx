@@ -5,6 +5,7 @@ import { FormEvent, useState } from 'react';
 interface QuestionInputProps {
   busy: boolean;
   voiceActive?: boolean;
+  voiceStatus?: string;
   showTestingControls?: boolean;
   onSubmit: (question: string) => Promise<void>;
   onSimulateVoice?: (question: string) => Promise<void>;
@@ -12,7 +13,7 @@ interface QuestionInputProps {
   onStopVoice?: () => Promise<void>;
 }
 
-export function QuestionInput({ busy, voiceActive, showTestingControls = true, onSubmit, onSimulateVoice, onStartVoice, onStopVoice }: QuestionInputProps) {
+export function QuestionInput({ busy, voiceActive, voiceStatus, showTestingControls = true, onSubmit, onSimulateVoice, onStartVoice, onStopVoice }: QuestionInputProps) {
   const [question, setQuestion] = useState('');
 
   async function submitQuestion(mode: 'ask' | 'voice') {
@@ -35,6 +36,7 @@ export function QuestionInput({ busy, voiceActive, showTestingControls = true, o
     <form onSubmit={handleSubmit} style={{ marginTop: 20 }}>
       <label style={{ display: 'block', marginBottom: 8, color: 'var(--muted)' }}>
         {showTestingControls ? 'Ask a question' : 'Live voice'}
+        {voiceStatus ? <span style={{ marginLeft: 10, fontSize: 12, color: voiceActive ? '#047857' : 'var(--muted)' }}>· {voiceStatus}</span> : null}
       </label>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {showTestingControls ? (
@@ -101,7 +103,7 @@ export function QuestionInput({ busy, voiceActive, showTestingControls = true, o
             fontWeight: 700,
           }}
         >
-          {voiceActive ? 'Voice live' : 'Start live voice'}
+          {voiceActive ? 'Voice live' : voiceStatus === 'Voice disconnected' ? 'Restart live voice' : 'Start live voice'}
         </button>
         <button
           type="button"
@@ -117,7 +119,7 @@ export function QuestionInput({ busy, voiceActive, showTestingControls = true, o
             fontWeight: 700,
           }}
         >
-          Stop voice
+          End live voice
         </button>
       </div>
     </form>

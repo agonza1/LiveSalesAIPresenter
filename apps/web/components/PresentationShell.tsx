@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { askQuestion, bootstrapSession, controlSession, getPipecatAgentState, getPipecatLiveState, getPublicSession, getSessionLiveState, gotoSlide, sendVoicePipelineQuestion, setAutoplay, startVoicePipeline, stopVoicePipeline } from '@/lib/api';
+import { askQuestion, bootstrapSession, controlSession, getPipecatAgentState, getPipecatLiveState, getPublicSession, getSessionLiveState, gotoSlide, promptVoicePipelineOpening, sendVoicePipelineQuestion, setAutoplay, startVoicePipeline, stopVoicePipeline } from '@/lib/api';
 import { connectRealtimeBrowserSession, RealtimeBrowserSession, RealtimeConnectionStatus, RealtimeToolDefinition } from '@/lib/realtimeClient';
 import { connectPipecatSession } from '@/lib/pipecatClient';
 import { BootstrapStatus, SessionLiveState, SessionSnapshot, TranscriptEvent, VoicePipelineStatus } from '@/lib/types';
@@ -42,6 +42,12 @@ export function PresentationShell({ initialData }: Props) {
   const [avatarVideoActive, setAvatarVideoActive] = useState(false);
   const realtimeClientRef = useRef<RealtimeBrowserSession | null>(null);
   const voiceStartRef = useRef(false);
+
+  const voiceActive = Boolean(
+    avatarVideoActive ||
+      ['connecting', 'connected', 'responding', 'listening'].includes(liveConnectionStatus) ||
+      (voicePipeline && !['idle', 'error', 'disconnected', 'ended'].includes(String(voicePipeline.status))),
+  );
 
   const currentSlide = useMemo(
     () => snapshot.slides.find((slide) => slide.index === snapshot.session.current_slide_index) ?? snapshot.slides[0],
@@ -397,7 +403,7 @@ export function PresentationShell({ initialData }: Props) {
     const instructions = pipeline.agent?.instructions ?? pipeline.transport?.instructions ?? pipeline.instructions ?? bootstrap?.agent?.instructions ?? bootstrap?.realtime?.instructions ?? null;
     const pipecatBaseUrl = '/pipecat';
     const pipecatConnectUrl = `${pipecatBaseUrl}/sessions/${sessionId}/live/create`;
-    const pipecatStopUrl = `${pipecatBaseUrl}/sessions/${sessionId}/live/stop`;
+    const pipecatStopUrl = `${pipecatBaseUrl}/sessions/${sessionId}/disconnect`;
 
     if (pipeline.mode === 'pipecat-orchestrated' && pipecatConnectUrl) {
       try {
@@ -524,12 +530,40 @@ export function PresentationShell({ initialData }: Props) {
     voiceStartRef.current = false;
     await realtimeClientRef.current?.disconnect();
     realtimeClientRef.current = null;
-    setLiveConnectionStatus('idle');
+    setLiveConnectionStatus('disconnected');
     setAvatarVideoActive(false);
+    setRemoteAudioLevel(0);
     const result = await stopVoicePipeline(sessionId);
-    setVoicePipeline(result);
+    setVoicePipeline({
+      ...result,
+      status: 'disconnected',
+    });
     setLiveTranscript('');
     setLiveAnswer('');
+  }
+
+  async function promptOpeningMonologue() {
+    try {
+      const result = await promptVoicePipelineOpening(sessionId);
+      const agentStatus = (result as VoicePipelineStatus & { agent_status?: string }).agent_status;
+      setVoicePipeline((current) => ({
+        ...(current ?? { mode: 'pipecat-orchestrated' }),
+        ...result,
+        status: agentStatus ?? result.status ?? 'speaking',
+      }));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not queue opening presenter audio.');
+    }
+  }
+
+  async function handleStartPresentation() {
+    await controlSession(sessionId, 'start');
+    const started = await getPublicSession(sessionToken);
+    if (!realtimeClientRef.current?.isConnected()) {
+      await handleStartVoice();
+    }
+    await promptOpeningMonologue();
+    return started;
   }
 
   async function run(
@@ -604,10 +638,7 @@ export function PresentationShell({ initialData }: Props) {
           busy={busy}
           autoplayEnabled={snapshot.session.autoplay_enabled}
           autoplayIntervalSeconds={snapshot.session.autoplay_interval_seconds}
-          onStart={() => run(async () => {
-            await controlSession(sessionId, 'start');
-            return getPublicSession(sessionToken);
-          }, { preferStatus: 'presenting', refreshRetries: 8 })}
+          onStart={() => run(handleStartPresentation, { preferStatus: 'presenting', refreshRetries: 8 })}
           onPause={() => run(async () => ({
             session: await controlSession(sessionId, 'pause'),
             deck: snapshot.deck,
@@ -656,7 +687,8 @@ export function PresentationShell({ initialData }: Props) {
 
         <QuestionInput
           busy={busy}
-          voiceActive={voicePipeline?.status === 'listening' || voicePipeline?.status === 'thinking' || voicePipeline?.status === 'speaking'}
+          voiceActive={voiceActive}
+          voiceStatus={voiceActive ? 'Live voice connected' : liveConnectionStatus === 'disconnected' ? 'Voice disconnected' : 'Voice idle'}
           showTestingControls={SHOW_TESTING_CONTROLS}
           onSubmit={(question) =>
             run(async () => {
@@ -746,7 +778,7 @@ export function PresentationShell({ initialData }: Props) {
         <HeyGenAvatarPanel
           talkTrack={activeVoiceLine}
           speaking={speaking}
-          voiceActive={avatarVideoActive || ['connecting', 'connected'].includes(liveConnectionStatus) || Boolean(voicePipeline && !['idle', 'error', 'disconnected'].includes(String(voicePipeline.status)))}
+          voiceActive={voiceActive}
         />
         <DemoReadinessCard snapshot={snapshot} bootstrap={bootstrap} voice={voicePipeline} />
         <LiveOpsCard live={liveState} />

@@ -277,6 +277,15 @@ export async function sendVoicePipelineQuestion(sessionId: string, transcript: s
   return handleResponse<VoicePipelineStatus>(response);
 }
 
+export async function promptVoicePipelineOpening(sessionId: string): Promise<VoicePipelineStatus> {
+  const response = await fetch(`${getPipecatBase()}/sessions/${sessionId}/present-current`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  return handleResponse<VoicePipelineStatus>(response);
+}
+
 export async function stopVoicePipeline(sessionId: string): Promise<VoicePipelineStatus> {
   const live = await stopPipecatLiveSession(sessionId).catch(() => null);
   const agent = await stopPipecatAgent(sessionId);

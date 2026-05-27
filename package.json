@@ -1,5 +1,5 @@
 {
-  "name": "live-sales-ai-presenter",
+  "name": "conversation-agent-evals",
   "private": true,
   "workspaces": [
     "apps/web"
@@ -9,13 +9,14 @@
     "dev": "node scripts/dev.js",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "apps/api/.venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 0.0.0.0 --port ${API_PORT:-8000}",
-    "dev:pipecat": "(test -d apps/pipecat/.venv || python3 -m venv apps/pipecat/.venv) && . apps/pipecat/.venv/bin/activate && pip install -q -r apps/pipecat/requirements.txt && uvicorn server:app --app-dir apps/pipecat --host 0.0.0.0 --port ${PIPECAT_PORT:-8110}",
+    "dev:pipecat": "node scripts/dev-pipecat.js",
     "build:web": "rm -rf apps/web/.next && npm --workspace apps/web run build",
     "start:web": "rm -rf apps/web/.next && npm --workspace apps/web run build && npm --workspace apps/web run start",
     "lint:web": "npm --workspace apps/web run lint",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "test:api": "apps/api/.venv/bin/python -m pytest apps/api/tests -q",
+    "test:benchmark-smoke": "node scripts/benchmark-http-smoke.mjs",
     "test:voice-proof": "npx playwright test apps/web/tests/voice-proof.spec.ts --config apps/web/playwright.config.ts",
     "test:e2e": "npm --workspace apps/web run test:e2e"
   },

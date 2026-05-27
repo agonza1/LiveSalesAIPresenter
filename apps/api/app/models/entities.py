@@ -84,3 +84,19 @@ class PresentationEvent(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     session = relationship('PresentationSession', back_populates='presentation_events')
+
+
+class BenchmarkRun(Base):
+    __tablename__ = 'benchmark_runs'
+
+    id = Column(String, primary_key=True)
+    suite_id = Column(String, nullable=False, index=True)
+    suite_name = Column(String, nullable=False)
+    scenario_id = Column(String, nullable=False, index=True)
+    scenario_title = Column(String, nullable=False)
+    provider = Column(String, nullable=False, default='')
+    verdict = Column(String, nullable=False)
+    overall_score = Column(Integer, nullable=False)
+    report_json = Column(Text, nullable=False)
+    evidence_json = Column(Text, nullable=False, default='{}')
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

@@ -22,8 +22,11 @@ test('benchmark runner simulates passing and failure scenario reports', async ({
   await expect(page.getByRole('heading', { name: /run the real benchmark workflow/i })).toBeVisible();
   await expect(page.getByLabel('Benchmark suite')).toContainText('Call Center Voice AI', { timeout: 30_000 });
   await expect(page.getByLabel('Scenario')).toContainText('Billing Address Change');
+  await expect(page.getByRole('link', { name: 'Suite contract' })).toHaveAttribute('href', /\/api\/benchmarks\/suites\/call-center-voice-ai\/contract/);
+  await expect(page.getByRole('link', { name: 'Scenario contract' })).toHaveAttribute('href', /\/api\/benchmarks\/suites\/call-center-voice-ai\/scenarios\/billing-address-change\/contract/);
   await page.getByText('Scenario rubric').click();
   await expect(page.getByText('Caller only knows the old ZIP code at first.')).toBeVisible();
+  await expect(page.getByText('The account is verified, the billing address update is confirmed')).toBeVisible();
 
   await page.getByLabel('Agent profile').fill('playwright text agent');
   await page.getByLabel('Agent version').fill('agent-playwright-v2');
@@ -34,6 +37,7 @@ test('benchmark runner simulates passing and failure scenario reports', async ({
   await expect(page.getByRole('heading', { name: /pass/i })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Agent agent-playwright-v2 · Prompt prompt-playwright · Model model-playwright')).toBeVisible();
   await expect(page.getByText('Synthetic conversation')).toBeVisible();
+  await expect(page.getByText('Evidence quality')).toBeVisible();
   await expect(page.getByText('Synthetic user')).toBeVisible();
   await expect(page.getByText(/playwright text agent/)).toBeVisible();
   await expect(page.getByText('vCon artifact')).toBeVisible();

@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_serializer, field_validator
 
 
 SessionStatus = Literal['idle', 'presenting', 'paused', 'answering', 'ended']
@@ -88,6 +88,14 @@ class GotoSlideRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str
+
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls, value: str) -> str:
+        question = value.strip()
+        if not question:
+            raise ValueError('Question cannot be empty')
+        return question
 
 
 class AutoplayUpdateRequest(BaseModel):

@@ -250,3 +250,133 @@ export interface DefaultDeckMeta {
   available: boolean;
   name: string;
 }
+
+export interface EvalCheck {
+  name: string;
+  status: 'pass' | 'needs_review' | string;
+  score: number;
+  layer: string;
+  root_cause_tag: string;
+  evidence: string[];
+  reason: string;
+}
+
+export interface EvalRunResponse {
+  title: string;
+  source_format: string;
+  overall_score: number;
+  verdict: 'pass' | 'needs_review' | string;
+  checks: EvalCheck[];
+  risk_flags: string[];
+  suggested_fixes: string[];
+  transcript_preview: string;
+  vcon_analysis: Record<string, unknown>;
+  vcon_export: Record<string, unknown>;
+}
+
+export interface BenchmarkScenarioAction {
+  name: string;
+  description?: string;
+  tool_name?: string | null;
+  arguments?: Record<string, unknown> | null;
+}
+
+export interface BenchmarkScenario {
+  id: string;
+  suite_id?: string;
+  title: string;
+  description: string;
+  user_goal: string;
+  user_prompt?: string;
+  required_actions: Array<string | BenchmarkScenarioAction>;
+  forbidden_actions: Array<string | BenchmarkScenarioAction>;
+  success_criteria: string[];
+  expected_final_state?: Record<string, unknown> | string | null;
+  tags?: string[];
+  difficulty?: string | null;
+}
+
+export interface BenchmarkSuite {
+  id: string;
+  name?: string;
+  title?: string;
+  provider?: string;
+  description: string;
+  domain?: string;
+  version?: string | null;
+  scenario_count?: number;
+  scenarios: BenchmarkScenario[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BenchmarkRunPayload {
+  suite_id?: string;
+  suiteId?: string;
+  scenario_id: string;
+  scenarioId?: string;
+  target_agent_url?: string;
+  targetAgentUrl?: string;
+  transcript?: string;
+  conversation?: string | Record<string, unknown> | unknown[];
+  action_trace?: string | Array<Record<string, unknown>> | Record<string, unknown>;
+  final_state?: Record<string, unknown> | string | unknown[] | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BenchmarkRunCheck {
+  name: string;
+  status: 'pass' | 'fail' | 'needs_review' | string;
+  score: number;
+  evidence: string[];
+  reason: string;
+}
+
+export interface BenchmarkRunResponse {
+  run_id: string;
+  suite_id?: string | null;
+  suite_name?: string;
+  scenario_id: string;
+  scenario_title?: string;
+  provider?: string;
+  status?: 'completed' | 'failed' | 'needs_review' | string;
+  overall_score: number;
+  score?: number;
+  verdict: 'pass' | 'fail' | 'needs_review' | string;
+  checks?: BenchmarkRunCheck[];
+  task_completion_score?: number;
+  required_action_score?: number;
+  forbidden_action_score?: number;
+  final_state_score?: number;
+  rubric_score?: number;
+  completed_actions?: string[];
+  missing_actions?: string[];
+  forbidden_action_hits?: Array<Record<string, unknown>>;
+  forbidden_actions_observed?: string[];
+  rubric_checks?: Array<Record<string, unknown>>;
+  recommendations?: string[];
+  transcript?: string | null;
+  transcript_preview?: string;
+  action_trace?: Array<Record<string, unknown>> | Record<string, unknown> | string | null;
+  final_state?: Record<string, unknown> | string | null;
+  expected_final_state?: Record<string, unknown> | string | null;
+  failure_category?: string | null;
+  failure_categories?: string[];
+  suggested_fixes?: string[];
+  evidence?: Array<string | Record<string, unknown>>;
+  evidence_spans?: Array<string | Record<string, unknown>>;
+  evidence_artifacts?: Record<string, unknown>;
+}
+
+export interface BenchmarkSimulationResponse {
+  suite_id: string;
+  suite_name?: string;
+  scenario_id: string;
+  scenario_title?: string;
+  conversation?: Array<Record<string, string>>;
+  transcript: string;
+  vcon?: Record<string, unknown>;
+  action_trace: Array<Record<string, unknown>>;
+  final_state: Record<string, unknown>;
+  benchmark_report: BenchmarkRunResponse;
+}

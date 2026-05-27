@@ -15,9 +15,11 @@ interface QuestionInputProps {
 
 export function QuestionInput({ busy, voiceActive, voiceStatus, showTestingControls = true, onSubmit, onSimulateVoice, onStartVoice, onStopVoice }: QuestionInputProps) {
   const [question, setQuestion] = useState('');
+  const trimmedQuestion = question.trim();
+  const canAsk = Boolean(trimmedQuestion) && !busy;
 
   async function submitQuestion(mode: 'ask' | 'voice') {
-    const trimmed = question.trim();
+    const trimmed = trimmedQuestion;
     if (!trimmed) return;
     if (mode === 'voice' && onSimulateVoice) {
       await onSimulateVoice(trimmed);
@@ -58,7 +60,7 @@ export function QuestionInput({ busy, voiceActive, voiceStatus, showTestingContr
             />
             <button
               type="submit"
-              disabled={busy}
+              disabled={!canAsk}
               style={{
                 border: 'none',
                 borderRadius: 14,
@@ -73,7 +75,7 @@ export function QuestionInput({ busy, voiceActive, voiceStatus, showTestingContr
             </button>
             <button
               type="button"
-              disabled={busy || !onSimulateVoice}
+              disabled={!canAsk || !onSimulateVoice}
               onClick={() => void submitQuestion('voice')}
               style={{
                 borderRadius: 14,

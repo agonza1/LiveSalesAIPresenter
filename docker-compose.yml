@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: conversation-agent-evals-api:latest
     env_file:
       - .env
     environment:
@@ -11,6 +9,7 @@ services:
     ports:
       - "${API_PORT:-8025}:8000"
     volumes:
+      - ./apps/api:/workspace/apps/api
       - ./storage:/workspace/storage
       - ./apps/api/sales_presenter.db:/workspace/apps/api/sales_presenter.db
     healthcheck:
@@ -20,14 +19,14 @@ services:
       retries: 5
 
   pipecat:
-    build:
-      context: .
-      dockerfile: apps/pipecat/Dockerfile
+    image: conversation-agent-evals-pipecat:latest
     env_file:
       - .env
     environment:
       API_BASE_URL: http://api:8000
       PIPECAT_SERVICE_URL: http://pipecat:8110
+    volumes:
+      - ./apps/pipecat:/app
     ports:
       - "${PIPECAT_PORT:-8110}:8110"
     depends_on:
@@ -35,9 +34,7 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: conversation-agent-evals-web:latest
     env_file:
       - .env
     environment:
@@ -46,6 +43,8 @@ services:
       PIPECAT_SERVICE_URL: http://pipecat:8110
       NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8025}
       NEXT_PUBLIC_PIPECAT_SERVICE_URL: http://localhost:${PIPECAT_PORT:-8110}
+    volumes:
+      - ./apps/web:/app/apps/web
     ports:
       - "${PORT:-3012}:3000"
     depends_on:

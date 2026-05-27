@@ -27,6 +27,21 @@ const nextConfig = {
     ];
   },
   webpack: (config, { dev, isServer }) => {
+    config.watchOptions = {
+      ...(config.watchOptions || {}),
+      ignored: [
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/.venv/**',
+        '**/.venv-*/**',
+        '**/.venv-py*/**',
+        '**/.openclaw/**',
+        '**/memory/**',
+        '**/storage/**',
+        '**/media/**',
+      ],
+    };
+
     // Robust local-demo fix: stale standalone/runtime artifacts can leave server bundles
     // requiring vendor-chunks that do not exist in a normal next build/start flow.
     // Disable the separate vendor chunk split on server prod builds so the route bundle

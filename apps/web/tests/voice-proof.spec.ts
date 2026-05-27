@@ -81,7 +81,8 @@ test('voice-only transcript loop and live transport handshake work', async ({ pa
     let gatheredCandidate = false;
     let remoteDescriptionSet = false;
     const pendingIceCandidates: RTCIceCandidateInit[] = [];
-    const destination = new AudioContext().createMediaStreamDestination();
+    const audioContext = new AudioContext();
+    const destination = audioContext.createMediaStreamDestination();
     const oscillator = new OscillatorNode(destination.context, { type: 'sine', frequency: 440 });
     const gain = new GainNode(destination.context, { gain: 0.0001 });
     oscillator.connect(gain);
@@ -163,7 +164,7 @@ test('voice-only transcript loop and live transport handshake work', async ({ pa
     }));
     oscillator.stop();
     destination.stream.getTracks().forEach((track) => track.stop());
-    destination.context.close();
+    await audioContext.close();
     pc.close();
     return {
       answerType: joinPayload.answer.type,

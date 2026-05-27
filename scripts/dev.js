@@ -157,6 +157,7 @@ async function main() {
     PORT: String(webPort),
     NEXT_PUBLIC_API_BASE_URL: apiBaseUrl,
     NEXT_PUBLIC_PIPECAT_SERVICE_URL: pipecatServiceUrl,
+    WATCHPACK_POLLING: process.env.WATCHPACK_POLLING || 'true',
   });
 }
 

@@ -42,6 +42,10 @@ interface BenchmarkReport {
   required_action_score?: number;
   forbidden_action_score?: number;
   final_state_score?: number;
+  workflow_order_score?: number;
+  evidence_quality_score?: number;
+  evidence_quality_warnings?: string[];
+  workflow_order_violations?: Array<string | JsonRecord>;
   evidence_spans?: Array<string | JsonRecord>;
   evidence?: Array<string | JsonRecord>;
   missing_actions?: string[];
@@ -537,6 +541,36 @@ function benchmarkRunsJunitHref(payload: {
   return `${getApiBase()}/api/benchmarks/runs.junit.xml?${params.toString()}`;
 }
 
+function benchmarkRunsSarifHref(payload: {
+  suiteId?: string;
+  scenarioId?: string;
+  agentVersion?: string;
+  promptVersion?: string;
+  modelName?: string;
+  targetAgentUrl?: string;
+}) {
+  const params = new URLSearchParams();
+  if (payload.suiteId) params.set('suite_id', payload.suiteId);
+  if (payload.scenarioId) params.set('scenario_id', payload.scenarioId);
+  if (payload.agentVersion?.trim()) params.set('agent_version', payload.agentVersion.trim());
+  if (payload.promptVersion?.trim()) params.set('prompt_version', payload.promptVersion.trim());
+  if (payload.modelName?.trim()) params.set('model_name', payload.modelName.trim());
+  if (payload.targetAgentUrl?.trim()) params.set('target_agent_url', payload.targetAgentUrl.trim());
+  params.set('limit', '100');
+
+  return `${getApiBase()}/api/benchmarks/runs.sarif.json?${params.toString()}`;
+}
+
+function benchmarkSuiteContractHref(suiteId?: string) {
+  if (!suiteId) return '#';
+  return `${getApiBase()}/api/benchmarks/suites/${encodeURIComponent(suiteId)}/contract`;
+}
+
+function benchmarkScenarioContractHref(suiteId?: string, scenarioId?: string) {
+  if (!suiteId || !scenarioId) return '#';
+  return `${getApiBase()}/api/benchmarks/suites/${encodeURIComponent(suiteId)}/scenarios/${encodeURIComponent(scenarioId)}/contract`;
+}
+
 function EvidenceItem({ item }: { item: string | JsonRecord }) {
   if (typeof item === 'string') {
     return <li>{item}</li>;
@@ -841,6 +875,24 @@ export function BenchmarkRunner() {
               <h3 style={{ margin: 0 }}>{selectedScenario.title}</h3>
             </div>
             <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>{selectedScenario.user_goal || selectedScenario.user_persona || 'No goal provided.'}</p>
+            <div style={{ display: 'inline-flex', gap: 10, flexWrap: 'wrap' }}>
+              <a
+                href={benchmarkSuiteContractHref(selectedSuite?.id)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--accent)', fontWeight: 850, fontSize: 13, textDecoration: 'none' }}
+              >
+                Suite contract
+              </a>
+              <a
+                href={benchmarkScenarioContractHref(selectedSuite?.id, selectedScenario.id)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: 'var(--accent)', fontWeight: 850, fontSize: 13, textDecoration: 'none' }}
+              >
+                Scenario contract
+              </a>
+            </div>
             <details>
               <summary style={{ cursor: 'pointer', fontWeight: 800 }}>Scenario rubric</summary>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 12 }}>
@@ -849,6 +901,7 @@ export function BenchmarkRunner() {
                 <ScenarioList title="Edge cases" items={toStringList(selectedScenario.edge_cases)} />
                 <ScenarioList title="Constraints" items={toStringList(selectedScenario.constraints)} />
               </div>
+              <ScenarioValue title="Expected final state" value={selectedScenario.expected_final_state} />
             </details>
           </div>
         ) : !isLoading ? (
@@ -1093,12 +1146,16 @@ export function BenchmarkRunner() {
             <ScoreTile label="Required actions" score={report.required_action_score} />
             <ScoreTile label="Forbidden actions" score={report.forbidden_action_score} />
             <ScoreTile label="Final state" score={report.final_state_score} />
+            <ScoreTile label="Workflow order" score={report.workflow_order_score} />
+            <ScoreTile label="Evidence quality" score={report.evidence_quality_score} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             <ReportList title="Failure categories" items={report.failure_categories} empty="No failure categories reported." />
             <ReportList title="Missing actions" items={report.missing_actions} empty="No missing required actions reported." />
             <ReportList title="Forbidden actions observed" items={report.forbidden_actions_observed} empty="No forbidden actions observed." />
+            <ReportList title="Workflow order" items={report.workflow_order_violations} empty="No workflow order issues reported." />
+            <ReportList title="Evidence quality warnings" items={report.evidence_quality_warnings} empty="No evidence quality warnings reported." />
             <ReportList title="Voice quality risks" items={report.voice_quality_risks} empty="No voice quality risks reported." />
             <ReportList title="Suggested fixes" items={report.suggested_fixes} empty="No suggested fixes reported." />
           </div>
@@ -1260,6 +1317,29 @@ export function BenchmarkRunner() {
               >
                 Export JUnit
               </a>
+              <a
+                href={benchmarkRunsSarifHref({
+                  suiteId: selectedSuite?.id,
+                  scenarioId: selectedScenario?.id,
+                  agentVersion,
+                  promptVersion,
+                  modelName,
+                  targetAgentUrl,
+                })}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  color: 'var(--accent)',
+                  fontSize: 13,
+                  fontWeight: 850,
+                  padding: '7px 10px',
+                  textDecoration: 'none',
+                }}
+              >
+                Export SARIF
+              </a>
             </div>
           </div>
           {regressionSummary ? (
@@ -1401,6 +1481,17 @@ function ScenarioList({ title, items }: { title: string; items: string[] }) {
       ) : (
         <p style={{ margin: 0, color: 'var(--muted)' }}>Not specified.</p>
       )}
+    </div>
+  );
+}
+
+function ScenarioValue({ title, value }: { title: string; value: unknown }) {
+  const text = stringifyEditable(value, 'Not specified.');
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <p style={{ margin: '0 0 6px', fontWeight: 800 }}>{title}</p>
+      <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text}</p>
     </div>
   );
 }
@@ -1550,6 +1641,7 @@ function ReportExports({ runId, compact = false }: { runId?: string; compact?: b
     { label: 'vCon', href: `${getApiBase()}/api/benchmarks/runs/${encodedRunId}/vcon` },
     { label: 'JUnit', href: `${getApiBase()}/api/benchmarks/runs/${encodedRunId}/junit` },
     { label: 'JSONL', href: `${getApiBase()}/api/benchmarks/runs/${encodedRunId}/jsonl` },
+    { label: 'SARIF', href: `${getApiBase()}/api/benchmarks/runs/${encodedRunId}/sarif.json` },
     { label: 'Markdown', href: `${getApiBase()}/api/benchmarks/runs/${encodedRunId}/markdown` },
   ];
 
@@ -1596,13 +1688,16 @@ function ComparisonList({ title, items, empty, tone }: { title: string; items?: 
   );
 }
 
-function ReportList({ title, items, empty }: { title: string; items?: string[]; empty: string }) {
+function ReportList({ title, items, empty }: { title: string; items?: Array<string | JsonRecord>; empty: string }) {
   return (
     <div>
       <h3 style={{ marginTop: 0 }}>{title}</h3>
       {items?.length ? (
         <ul style={{ marginBottom: 0 }}>
-          {items.map((item) => <li key={item}>{item}</li>)}
+          {items.map((item) => {
+            const label = typeof item === 'string' ? item : JSON.stringify(item);
+            return <li key={label}>{label}</li>;
+          })}
         </ul>
       ) : (
         <p style={{ margin: 0, color: 'var(--muted)' }}>{empty}</p>

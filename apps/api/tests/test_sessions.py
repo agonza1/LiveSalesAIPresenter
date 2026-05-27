@@ -70,6 +70,13 @@ def test_deck_upload_session_and_qna(tmp_path: Path):
     assert start_response.status_code == 200
     assert start_response.json()['status'] == 'presenting'
 
+    blank_ask_response = client.post(
+        f"/api/sessions/{session_payload['session_id']}/ask",
+        json={'question': '   '},
+    )
+    assert blank_ask_response.status_code == 422
+    assert 'Question cannot be empty' in blank_ask_response.text
+
     transcript_after_start = client.get(f"/api/sessions/{session_payload['session_id']}/transcript")
     assert transcript_after_start.status_code == 200
     assert any(item['role'] == 'agent' and 'slide 1' in item['text'].lower() for item in transcript_after_start.json())
@@ -95,12 +102,14 @@ def test_deck_upload_session_and_qna(tmp_path: Path):
 
     ask_response = client.post(
         f"/api/sessions/{session_payload['session_id']}/ask",
-        json={'question': 'What is the solution and why now?'},
+        json={'question': '  What is the solution and why now?  '},
     )
     assert ask_response.status_code == 200
     answer_payload = ask_response.json()
     assert answer_payload['session_status'] == 'answering'
     assert answer_payload['citations']
+    transcript_after_ask = client.get(f"/api/sessions/{session_payload['session_id']}/transcript")
+    assert any(item['role'] == 'user' and item['text'] == 'What is the solution and why now?' for item in transcript_after_ask.json())
 
     pause_autoplay_response = client.post(
         f"/api/sessions/{session_payload['session_id']}/autoplay",

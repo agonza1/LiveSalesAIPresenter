@@ -12,6 +12,8 @@ const hostname = process.env.PLAYWRIGHT_HOSTNAME ?? '127.0.0.1';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://${hostname}:${port}`;
 const apiBaseURL = process.env.PLAYWRIGHT_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? `http://${hostname}:${apiPort}`;
 const pipecatBaseURL = process.env.PLAYWRIGHT_PIPECAT_BASE_URL ?? process.env.NEXT_PUBLIC_PIPECAT_SERVICE_URL ?? `http://${hostname}:${pipecatPort}`;
+const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL;
+const browserExecutablePath = process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH;
 process.env.PLAYWRIGHT_API_BASE_URL ??= apiBaseURL;
 process.env.PLAYWRIGHT_PIPECAT_BASE_URL ??= pipecatBaseURL;
 const usingExternalBaseUrl = Boolean(process.env.PLAYWRIGHT_BASE_URL);
@@ -27,6 +29,7 @@ const webServerCommand = process.env.PLAYWRIGHT_WEB_SERVER_COMMAND
     `NEXT_PUBLIC_API_BASE_URL=${apiBaseURL}`,
     `NEXT_PUBLIC_PIPECAT_SERVICE_URL=${pipecatBaseURL}`,
     `PIPECAT_PORT=${pipecatPort}`,
+    'WATCHPACK_POLLING=true',
     'npm run dev',
   ].join(' ');
 
@@ -52,6 +55,8 @@ export default defineConfig({
       },
   use: {
     baseURL,
+    ...(browserChannel ? { channel: browserChannel } : {}),
+    ...(browserExecutablePath ? { launchOptions: { executablePath: browserExecutablePath } } : {}),
     headless: true,
   },
 });

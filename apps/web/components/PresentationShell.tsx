@@ -130,6 +130,22 @@ export function PresentationShell({ initialData }: Props) {
       });
   }, [sessionId]);
 
+  const promptSlideChangeNarration = useCallback(async () => {
+    if (!voiceActive) return;
+
+    try {
+      const result = await promptVoicePipelineOpening(sessionId, 'slide_change');
+      const agentStatus = (result as VoicePipelineStatus & { agent_status?: string }).agent_status;
+      setVoicePipeline((current) => ({
+        ...(current ?? { mode: 'pipecat-orchestrated' }),
+        ...result,
+        status: agentStatus ?? result.status ?? 'speaking',
+      }));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not queue slide presenter audio.');
+    }
+  }, [sessionId, voiceActive]);
+
   useEffect(() => {
     if (!snapshot.session.autoplay_enabled || snapshot.session.status !== 'presenting') {
       autoplayAdvanceRef.current = false;
@@ -148,7 +164,10 @@ export function PresentationShell({ initialData }: Props) {
       }
       autoplayAdvanceRef.current = true;
       void controlSession(sessionId, 'advance-autoplay')
-        .then(() => refresh())
+        .then(async () => {
+          await refresh();
+          await promptSlideChangeNarration();
+        })
         .catch((err) => {
           setError(err instanceof Error ? err.message : 'Autoplay advance failed');
         })
@@ -158,7 +177,7 @@ export function PresentationShell({ initialData }: Props) {
     }, delay);
 
     return () => window.clearTimeout(timeout);
-  }, [refresh, sessionId, snapshot.session.autoplay_enabled, snapshot.session.autoplay_interval_seconds, snapshot.session.autoplay_started_at, snapshot.session.current_slide_index, snapshot.session.status, snapshot.slides.length]);
+  }, [refresh, sessionId, snapshot.session.autoplay_enabled, snapshot.session.autoplay_interval_seconds, snapshot.session.autoplay_started_at, snapshot.session.current_slide_index, snapshot.session.status, snapshot.slides.length, promptSlideChangeNarration]);
 
   useEffect(() => {
     setSpeaking(
@@ -665,15 +684,21 @@ export function PresentationShell({ initialData }: Props) {
           }))}
           onPrev={() => run(async () => {
             await controlSession(sessionId, 'prev-slide');
-            return getPublicSession(sessionToken);
+            const next = await getPublicSession(sessionToken);
+            await promptSlideChangeNarration();
+            return next;
           }, { refreshRetries: 6 })}
           onNext={() => run(async () => {
             await controlSession(sessionId, 'next-slide');
-            return getPublicSession(sessionToken);
+            const next = await getPublicSession(sessionToken);
+            await promptSlideChangeNarration();
+            return next;
           }, { refreshRetries: 6 })}
           onGoto={(index) => run(async () => {
             await gotoSlide(sessionId, index);
-            return getPublicSession(sessionToken);
+            const next = await getPublicSession(sessionToken);
+            await promptSlideChangeNarration();
+            return next;
           }, { refreshRetries: 6 })}
           onAutoplayToggle={(enabled) => run(async () => {
             await setAutoplay(sessionId, enabled, snapshot.session.autoplay_interval_seconds);

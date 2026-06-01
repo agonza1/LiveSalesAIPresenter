@@ -202,6 +202,10 @@ class SessionAgentStartRequest(BaseModel):
     publicToken: str | None = None
 
 
+class PresentCurrentRequest(BaseModel):
+    intent: str = 'opening'
+
+
 class LiveSessionCreateRequest(BaseModel):
     publicToken: str | None = None
 
@@ -632,8 +636,34 @@ async def stop_live_session(session_id: str) -> dict[str, Any]:
     }
 
 
+async def _queue_presenter_prompt(*, state: PipecatSessionState, live: LivePresenterSession, intent: str = 'opening') -> None:
+    normalized_intent = (intent or 'opening').strip().lower()
+    if normalized_intent == 'slide_change':
+        prompt = (
+            'The visible slide just changed. Present the current slide now without waiting for audience input. '
+            'Do not greet the audience again. Use get_current_slide before speaking, then deliver the slide talk track concisely.'
+        )
+    else:
+        normalized_intent = 'opening'
+        prompt = (
+            'Start the presentation now. Briefly greet the audience, then present the current slide. '
+            'Use the current slide content and keep it concise. If a slide tool is available, use get_current_slide before speaking.'
+        )
+
+    context = LLMContext(messages=[{'role': 'user', 'content': prompt}])
+    await live.pipeline_task.queue_frame(LLMContextFrame(context))
+
+    state.status = 'connected'
+    state.agent_status = 'speaking'
+    state.last_transcript = prompt
+    state.live_session = _serialize_live_session(live)
+    state.frontend_contract = _build_agent_contract(state)
+    state.touch()
+    live.add_event('presenter_prompt_queued', intent=normalized_intent)
+
+
 @app.post('/sessions/{session_id}/present-current')
-async def present_current_slide(session_id: str) -> dict[str, Any]:
+async def present_current_slide(session_id: str, payload: PresentCurrentRequest | None = None) -> dict[str, Any]:
     state = SESSIONS.get(session_id)
     if not state:
         raise HTTPException(status_code=404, detail='Pipecat session not found. Start the agent first.')
@@ -648,20 +678,7 @@ async def present_current_slide(session_id: str) -> dict[str, Any]:
     if not live.pipeline_task or not live.pipeline_ready or not PIPECAT_RUNTIME_AVAILABLE:
         raise HTTPException(status_code=409, detail='Live voice pipeline is not ready to speak yet.')
 
-    prompt = (
-        'Start the presentation now. Briefly greet the audience, then present the current slide. '
-        'Use the current slide content and keep it concise. If a slide tool is available, use get_current_slide before speaking.'
-    )
-    context = LLMContext(messages=[{'role': 'user', 'content': prompt}])
-    await live.pipeline_task.queue_frame(LLMContextFrame(context))
-
-    state.status = 'connected'
-    state.agent_status = 'speaking'
-    state.last_transcript = prompt
-    state.live_session = _serialize_live_session(live)
-    state.frontend_contract = _build_agent_contract(state)
-    state.touch()
-    live.add_event('initial_presenter_prompt_queued')
+    await _queue_presenter_prompt(state=state, live=live, intent=(payload.intent if payload else 'opening'))
 
     return {
         'status': 'queued',
@@ -1526,6 +1543,21 @@ def _make_realtime_tool_handler(session_id: str) -> Callable[[Any], Awaitable[No
     async def handler(params: FunctionCallParams) -> None:
         result = await asyncio.to_thread(_dispatch_tool_call, session_id, params.function_name, params.arguments)
         await params.result_callback(result)
+
+        # The live server pipeline is transport -> realtime model -> avatar -> transport.
+        # Send function results directly so the model can continue the same turn.
+        send_tool_result = getattr(params.llm, '_send_tool_result', None)
+        create_response = getattr(params.llm, '_create_response', None)
+        if callable(send_tool_result):
+            await send_tool_result(params.tool_call_id, result)
+
+        if params.function_name in {'next_slide', 'prev_slide', 'goto_slide', 'restart_current_slide'}:
+            state = SESSIONS.get(session_id)
+            live = LIVE_SESSIONS.get(session_id)
+            if state and live and live.pipeline_task and live.pipeline_ready and PIPECAT_RUNTIME_AVAILABLE:
+                await _queue_presenter_prompt(state=state, live=live, intent='slide_change')
+        elif callable(create_response):
+            await create_response()
 
     return handler
 

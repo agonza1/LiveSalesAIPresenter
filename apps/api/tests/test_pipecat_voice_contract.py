@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 from typing import Any
@@ -131,6 +132,113 @@ def test_pipecat_transcript_loop_handles_slide_tools_and_grounded_answers(
         and payload == {'question': 'What is the main value proposition?'}
         for method, url, payload in api_calls
     )
+
+
+def test_realtime_slide_tool_queues_new_slide_narration(monkeypatch: pytest.MonkeyPatch) -> None:
+    queued_frames: list[Any] = []
+    callback_results: list[dict[str, Any]] = []
+
+    class FakeContext:
+        def __init__(self, messages: list[dict[str, str]]) -> None:
+            self.messages = messages
+
+    class FakeFrame:
+        def __init__(self, context: FakeContext) -> None:
+            self.context = context
+
+    class FakePipelineTask:
+        async def queue_frame(self, frame: FakeFrame) -> None:
+            queued_frames.append(frame)
+
+    class FakeLLM:
+        def __init__(self) -> None:
+            self.sent_tool_results: list[tuple[str, dict[str, Any]]] = []
+            self.response_count = 0
+
+        async def _send_tool_result(self, tool_call_id: str, result: dict[str, Any]) -> None:
+            self.sent_tool_results.append((tool_call_id, result))
+
+        async def _create_response(self) -> None:
+            self.response_count += 1
+
+    fake_llm = FakeLLM()
+
+    class FakeParams:
+        function_name = 'next_slide'
+        tool_call_id = 'call-next-slide'
+        arguments: dict[str, Any] = {}
+        llm = fake_llm
+
+        async def result_callback(self, result: dict[str, Any]) -> None:
+            callback_results.append(result)
+
+    monkeypatch.setattr(pipecat_server, 'PIPECAT_RUNTIME_AVAILABLE', True)
+    monkeypatch.setattr(pipecat_server, 'LLMContext', FakeContext)
+    monkeypatch.setattr(pipecat_server, 'LLMContextFrame', FakeFrame)
+    monkeypatch.setattr(pipecat_server, '_dispatch_tool_call', lambda session_id, tool_name, arguments=None: {'ok': True, 'tool': tool_name})
+
+    pipecat_server.SESSIONS['session-1'] = pipecat_server.PipecatSessionState(
+        session_id='session-1',
+        public_token='public-test-token',
+        status='connected',
+        connected=True,
+    )
+    live = pipecat_server.LivePresenterSession(
+        session_id='session-1',
+        public_token='public-test-token',
+        webrtc=pipecat_server.SmallWebRTCConnection(),
+    )
+    live.pipeline_task = FakePipelineTask()
+    live.pipeline_ready = True
+    pipecat_server.LIVE_SESSIONS['session-1'] = live
+
+    handler = pipecat_server._make_realtime_tool_handler('session-1')
+    asyncio.run(handler(FakeParams()))
+
+    assert callback_results == [{'ok': True, 'tool': 'next_slide'}]
+    assert fake_llm.sent_tool_results == [('call-next-slide', {'ok': True, 'tool': 'next_slide'})]
+    assert fake_llm.response_count == 0
+    assert len(queued_frames) == 1
+    assert 'visible slide just changed' in queued_frames[0].context.messages[0]['content']
+    assert pipecat_server.SESSIONS['session-1'].agent_status == 'speaking'
+    assert live.events[-1]['type'] == 'presenter_prompt_queued'
+    assert live.events[-1]['payload']['intent'] == 'slide_change'
+
+
+def test_realtime_current_slide_tool_result_continues_model_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    callback_results: list[dict[str, Any]] = []
+
+    class FakeLLM:
+        def __init__(self) -> None:
+            self.sent_tool_results: list[tuple[str, dict[str, Any]]] = []
+            self.response_count = 0
+
+        async def _send_tool_result(self, tool_call_id: str, result: dict[str, Any]) -> None:
+            self.sent_tool_results.append((tool_call_id, result))
+
+        async def _create_response(self) -> None:
+            self.response_count += 1
+
+    fake_llm = FakeLLM()
+
+    class FakeParams:
+        function_name = 'get_current_slide'
+        tool_call_id = 'call-current-slide'
+        arguments: dict[str, Any] = {}
+        llm = fake_llm
+
+        async def result_callback(self, result: dict[str, Any]) -> None:
+            callback_results.append(result)
+
+    slide = {'index': 1, 'title': 'The second slide', 'summary': 'Talk track'}
+    monkeypatch.setattr(pipecat_server, '_dispatch_tool_call', lambda session_id, tool_name, arguments=None: slide)
+
+    handler = pipecat_server._make_realtime_tool_handler('session-1')
+    asyncio.run(handler(FakeParams()))
+
+    assert callback_results == [slide]
+    assert fake_llm.sent_tool_results == [('call-current-slide', slide)]
+    assert fake_llm.response_count == 1
 
 
 def test_pipecat_disconnect_stops_and_removes_live_transport(client: TestClient) -> None:

@@ -277,10 +277,11 @@ export async function sendVoicePipelineQuestion(sessionId: string, transcript: s
   return handleResponse<VoicePipelineStatus>(response);
 }
 
-export async function promptVoicePipelineOpening(sessionId: string): Promise<VoicePipelineStatus> {
+export async function promptVoicePipelineOpening(sessionId: string, intent: 'opening' | 'slide_change' = 'opening'): Promise<VoicePipelineStatus> {
   const response = await fetch(`${getPipecatBase()}/sessions/${sessionId}/present-current`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent }),
   });
 
   return handleResponse<VoicePipelineStatus>(response);
